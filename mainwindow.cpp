@@ -3,6 +3,18 @@
 #include "QTimer"
 #include "QDebug"
 #include "QKeyEvent"
+#define BLOCK01_X_POS 300
+#define BLOCK01_Y_POS 40
+#define BLOCK02_X_POS 2300
+#define BLOCK02_Y_POS 110
+#define BLOCK03_X_POS 900
+#define BLOCK03_Y_POS 190
+#define BLOCK04_X_POS 2800
+#define BLOCK04_Y_POS 260
+#define BLOCK05_X_POS 1700
+#define BLOCK05_Y_POS 310
+#define BLOCK06_X_POS 1500
+#define BLOCK06_Y_POS 340
 
 /*
  * game_status:
@@ -17,6 +29,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) , ui(new Ui::MainW
     ui->setupUi(this);
 
     game_status = 0;
+
+    // 隱藏障礙物
+    ui->block01->setGeometry(QRect(-100, 0, 64, 64));
+    ui->block02->setGeometry(QRect(-100, 0, 64, 64));
+    ui->block03->setGeometry(QRect(-100, 0, 64, 64));
+    ui->block04->setGeometry(QRect(-100, 0, 64, 64));
+    ui->block05->setGeometry(QRect(-100, 0, 64, 64));
+    ui->block06->setGeometry(QRect(-100, 0, 64, 64));
+
 
     // 移動物體
     bgm_pos = 0;
@@ -35,24 +56,6 @@ MainWindow::~MainWindow() {
     delete ui;
 }
 
-void MainWindow::update_object() {
-    bgm_pos -= 1; // 背景位置每次往左移動1
-
-    ui -> background->setGeometry(QRect(bgm_pos, 0, 4800, 512)); // 設定背景位置
-
-    if(bgm_pos == -32) {
-        // 需移動一圈, 背景從頭顯示
-        bgm_pos = 0;
-    }
-
-    if(game_status == 1) {
-        // playing
-        car_distance += 1;
-        ui->label_distance->setText("行駛距離: " + QString::number(car_distance, 'f', 0) + "公尺");	// 顯示移動距離
-        move_car();
-    }
-}
-
 void MainWindow::update_time() {
     time -= 1; // 時間每次減少1
 
@@ -67,6 +70,38 @@ void MainWindow::update_time() {
 void MainWindow::game_stop() {
     clock_timer->stop();
     object_timer->stop();
+
+    if(game_status == 3) {
+        // timeout時間到, 過關
+        ui->label_title->setPixmap(QPixmap(":/src/game_timeout.png")); // 設定標題圖片
+    } else if(game_status == 4) {
+        // die撞到障礙物, 失敗
+        ui->label_title->setPixmap(QPixmap(":/src/game_falied.png")); // 設定標題圖片
+    }
+    ui->label_title->setVisible(true); // 顯示標題圖片
+    ui->button_start_game->setVisible(true); // 顯示[開始遊戲]按鈕
+
+    ui->action_start_game->setText("開始遊戲");	// 設定選單[開始遊戲]按鈕的文字
+}
+
+void MainWindow::update_object() {
+    bgm_pos -= 1; // 背景位置每次往左移動1
+
+    ui -> background->setGeometry(QRect(bgm_pos, 0, 4800, 512)); // 設定背景位置
+
+    if(bgm_pos == -32) {
+        // 需移動一圈, 背景從頭顯示
+        bgm_pos = 0;
+    }
+
+    if(game_status == 1) {
+        // playing
+        car_distance += 1;
+        ui->label_distance->setText("行駛距離: " + QString::number(car_distance, 'f', 0) + "公尺");	// 顯示移動距離
+        move_car(); // 呼叫move_car()移動車子的位置
+        move_blocks(); // 呼叫move_blocks()移動障礙物
+        detect_blocks();	// 呼叫detect_blocks()偵測障礙物
+    }
 }
 
 void MainWindow::on_button_start_game_clicked() {
@@ -85,6 +120,36 @@ void MainWindow::game_start() {
     car_pos = 220; // 重設車子的垂直位置(位於中央)
     car_distance = 0; // 重設移動距離
     car_direction = 0; // 重設車子移動方向(垂直)
+
+    if(!object_timer->isActive()) {
+        // 若物體移動計時器未啟動, 則將它啟動
+        object_timer->start(10);
+    }
+
+    ui->action_start_game->setText("暫停遊戲");	// 設定選單[開始遊戲]按鈕的文字
+}
+
+void MainWindow::game_pause() {
+    if(game_status == 1) {
+        // playing變為pause
+        game_status = 2; // 設為pause的狀態
+
+        clock_timer->stop(); // 停止時間計時器
+        object_timer->stop(); // 停止物體移動計時器
+
+        ui->label_title->setPixmap(QPixmap(":/src/game_pause.png")); // 設定標題圖片
+        ui->label_title->setVisible(true); // 顯示標題圖片
+        ui->action_start_game->setText("開始遊戲"); // 設定選單[開始遊戲]按鈕的文字
+    } else if(game_status == 2) {
+        // pause 變為 playing
+        game_status = 1;		// 設為 playing 的狀態
+
+        clock_timer->start(1000);	// 開始時間計時器
+        object_timer->start(10);	// 開始物體移動計時器
+
+        ui->action_start_game->setText("暫停遊戲"); // 設定選單[開始遊戲]按鈕的文字
+        ui->label_title->setVisible(false);	// 顯示標題圖片
+    }
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {
@@ -107,10 +172,87 @@ void MainWindow::move_car() {
         // 未超過邊緣
         car_pos = car_new_pos;	// 變更車子的位置
         ui->car->setGeometry(QRect(10, car_pos, 237, 71)); // 設定車子的垂直位置
+    } else {
+            // 超過邊緣
+            game_status = 4; // 設為die的狀態
+            game_stop(); // 遊戲結束
     }
-    else {
-        // 超過邊緣
-        game_status = 4; // 設為die的狀態
-        game_stop(); // 遊戲結束
+}
+
+void MainWindow::move_blocks() {
+    ui->block01->setGeometry(QRect(BLOCK01_X_POS - car_distance, BLOCK01_Y_POS, 64, 64));
+    ui->block02->setGeometry(QRect(BLOCK02_X_POS - car_distance, BLOCK02_Y_POS, 64, 64));
+    ui->block03->setGeometry(QRect(BLOCK03_X_POS - car_distance, BLOCK03_Y_POS, 64, 64));
+    ui->block04->setGeometry(QRect(BLOCK04_X_POS - car_distance, BLOCK04_Y_POS, 64, 64));
+    ui->block05->setGeometry(QRect(BLOCK05_X_POS - car_distance, BLOCK05_Y_POS, 64, 64));
+    ui->block06->setGeometry(QRect(BLOCK06_X_POS - car_distance, BLOCK06_Y_POS, 64, 64));
+}
+
+void MainWindow::detect_blocks() {
+    int tmp_padding_x, tmp_padding_y;	// 障礙物與車子的距離
+
+    tmp_padding_x = BLOCK01_X_POS - car_distance;
+    tmp_padding_y = BLOCK01_Y_POS - ui->car->y();
+    if(is_collision(tmp_padding_x, tmp_padding_y)) {
+        return;
     }
+
+    tmp_padding_x = BLOCK02_X_POS - car_distance;
+    tmp_padding_y = BLOCK02_Y_POS - ui->car->y();
+    if(is_collision(tmp_padding_x, tmp_padding_y)) {
+        return;
+    }
+
+    tmp_padding_x = BLOCK03_X_POS - car_distance;
+    tmp_padding_y = BLOCK03_Y_POS - ui->car->y();
+    if(is_collision(tmp_padding_x, tmp_padding_y)) {
+        return;
+    }
+
+    tmp_padding_x = BLOCK04_X_POS - car_distance;
+    tmp_padding_y = BLOCK04_Y_POS - ui->car->y();
+    if(is_collision(tmp_padding_x, tmp_padding_y)) {
+        return;
+    }
+
+    tmp_padding_x = BLOCK05_X_POS - car_distance;
+    tmp_padding_y = BLOCK05_Y_POS - ui->car->y();
+    if(is_collision(tmp_padding_x, tmp_padding_y)) {
+        return;
+    }
+
+    tmp_padding_x = BLOCK06_X_POS - car_distance;
+    tmp_padding_y = BLOCK06_Y_POS - ui->car->y();
+    if(is_collision(tmp_padding_x, tmp_padding_y)) {
+        return;
+    }
+}
+
+bool MainWindow::is_collision(int x, int y) {
+    if((x < 247) && (x > -50)) {
+        if((y < 55) && (y > -55)) {
+            game_status = 4; // 設為die的狀態
+            game_stop();
+            return true;
+        }
+    }
+    return false;
+}
+
+void MainWindow::on_action_start_game_triggered() {
+    switch (game_status) {
+        case 0:	// init
+        case 3:	// timeout
+        case 4:	// die
+            game_start();
+            break;
+        case 1:	// playing
+        case 2:	// pause
+            game_pause();
+        break;
+    }
+}
+
+void MainWindow::on_action_close_game_triggered() {
+    close();
 }
