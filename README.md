@@ -1,1 +1,1 @@
-# ncyu_racing_car
+# Racing-car-game
