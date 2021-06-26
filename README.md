@@ -1,5 +1,8 @@
 # 躲避車遊戲
 
+[![hackmd-github-sync-badge](https://hackmd.io/H_qo_3omRYaHAl1loJCh_Q/badge)](https://hackmd.io/H_qo_3omRYaHAl1loJCh_Q)
+![狀態](https://img.shields.io/badge/status-success-green)
+
 **課程:** 嘉大資工課外自學讀書會  第二期課程 - 跨平台圖形化程式開發  
 **題目:** 躲避車遊戲開發
 
